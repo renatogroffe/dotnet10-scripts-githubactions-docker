@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+  workflow_dispatch:
+
+jobs:
+  cli:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Exibir versao default do .NET
+        run: dotnet --version
+        
+      - name: Gerando arquivo tests.cs
+        run: |
+          mkdir src
+          cd src
+          cat <<EOF > tests.cs
+            using System.Runtime.InteropServices; 
+      
+            Console.WriteLine("");
+            Console.WriteLine("***** Testes com scripts CSharp *****");
+            Console.WriteLine("");
+      
+            // Id do Container
+            var environmentId = Environment.MachineName;
+            
+            // Versao do .NET
+            var dotnetVersion = RuntimeInformation.FrameworkDescription;
+      
+            Console.WriteLine("Id do Environment: " + environmentId);
+            Console.WriteLine("Versao do .NET: " + dotnetVersion);
+          EOF
+          
+      - name: Verificar se o arquivo tests.cs foi criado
+        run: |
+          cd ./src
+          pwd
+          echo
+          ls -l
+
+      - name: Exibir conteúdo do arquivo tests.cs
+        run: |
+          cat ./src/tests.cs  
+
+      - name: Publicar tests.cs como artefato
+        uses: actions/upload-artifact@v5
+        with:
+          name: tests-cs-file
+          path: src/tests.cs
+
+      - name: Executar o arquivo tests.cs via dotnet run
+        run: dotnet run ./src/tests.cs
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: cli
+
+    steps:
+      - name: Exibir versoes do .NET no ambiente
+        run: dotnet --list-sdks
+
+
+      - name: Exibir versao default do .NET
+        run: dotnet --version
+
+      - name: Baixar artefato tests.cs
+        uses: actions/download-artifact@v6
+        with:
+          name: tests-cs-file
+          path: ./src
+
+      - name: Exibir conteúdo do arquivo tests.cs
+        run: |
+          cat ./src/tests.cs
+
+      - name: Executar o arquivo tests.cs via dotnet run
+        run: dotnet run ./src/tests.cs
+
+      - name: Configurar versao default do .NET para 9.0.308
+        run: |
+          cat <<EOF > global.json
+          {
+            "sdk": {
+              "version": "9.0.308"
+            }
+          }
+          EOF
+
+      - name: Exibir o arquivo global.json criado
+        run: |
+          pwd
+          echo
+          ls
+          echo
+          echo
+          cat global.json
+
+      - name: Exibir versao default do .NET
+        run: dotnet --version
+
+      - name: Executar o arquivo tests.cs via dotnet run (Erro)
+        run: dotnet run ./src/tests.cs
+
+      - name: Executar o arquivo tests.cs via container Docker
+        run: |
+          docker run --name container01 -v ${GITHUB_WORKSPACE}/src:/src mcr.microsoft.com/dotnet/sdk:10.0.101 bash -c "dotnet run /src/tests.cs"
+        if: always()
+
+      - name: Exibir containers do ambiente
+        run: docker ps -a
+        if: always()
